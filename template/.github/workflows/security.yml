@@ -1,0 +1,227 @@
+name: security
+
+# Per-PR checks of the SDLC workflow (change 0001). No AI in CI: the reviews ran in the owner's
+# session and are committed as reports; appsec-baseline's verifier (pinned to appsec-baseline.lock)
+# checks them. Required: `stage gate` (tests + verify) and `security scanners`.
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Read-only test run that produces the JUnit the verifier checks named tests against (M-07):
+  # SDLC workflow tests and the app's tests, merged into one file.
+  tests:
+    name: tests (workflow + app)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ai-sdlc-lab/appsec-baseline
+          ref: e4e41f610da2532483048bad3f2c5a82411e4569 # = appsec-baseline.lock
+          path: .appsec-baseline
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      # Project toolchain (per stack; Python above is the workflow's own).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      # Every test suite of the project, one JUnit file `junit.xml` for the named-test check (Makefile).
+      - run: make ci-test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: junit
+          path: junit.xml
+          retention-days: 7
+
+  verify:
+    name: stage reviews
+    needs: [tests]
+    if: always()
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ai-sdlc-lab/appsec-baseline/.github/workflows/verify.yml@e4e41f610da2532483048bad3f2c5a82411e4569 # = appsec-baseline.lock
+
+  scanners:
+    name: security scanners
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+    env:
+      OSV_VERSION: v2.7.0
+      OSV_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+      TRIVY_VERSION: 0.76.1
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+      ACTIONLINT_VERSION: 1.7.12
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+      SEMGREP_IMAGE: semgrep/semgrep@sha256:3db5c7af55eb1f512eac0abf0ab69a97b52c74b5e9a27314c221aee1a78d7ab2
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ai-sdlc-lab/appsec-baseline
+          ref: e4e41f610da2532483048bad3f2c5a82411e4569 # = appsec-baseline.lock (test_workflow_pins_match_lock)
+          path: .appsec-baseline
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install scanners (pinned, checksum-verified)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLo osv-scanner "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  osv-scanner" | sha256sum -c -
+          curl -fsSLo gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          curl -fsSLo trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  trivy.tgz" | sha256sum -c -
+          curl -fsSLo actionlint.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks && tar -xzf trivy.tgz trivy && tar -xzf actionlint.tgz actionlint
+          sudo install osv-scanner gitleaks trivy actionlint /usr/local/bin/
+          pip install --quiet --require-hashes -r "$GITHUB_WORKSPACE/.appsec-baseline/tools/scanners/requirements.txt"
+
+      - name: Classify the diff (docs-only or code; fail-closed)
+        id: kind
+        run: |
+          set -euo pipefail
+          python3 -I -m pip install --quiet --require-hashes -r .appsec-baseline/gate/requirements.txt
+          python3 -I -B .appsec-baseline/stage/classify.py . "$BASE_SHA" HEAD > "$RUNNER_TEMP/diff.json"
+          kind=$(jq -r .kind "$RUNNER_TEMP/diff.json")
+          # Scanner configs the tools would load from the PR can silence them: never accepted in a PR.
+          if jq -r '.paths[]' "$RUNNER_TEMP/diff.json" | grep -E '(^|/)(\.gitleaks\.toml|\.gitleaksignore|\.semgrepignore|osv-scanner\.toml|trivy\.ya?ml|\.trivyignore(\.yaml)?)$'; then
+            echo "::error::scanner configuration files can't be added or changed in a PR (they're read from appsec-baseline)"; exit 1
+          fi
+          [[ "$kind" == docs || "$kind" == code ]] || kind=code
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "Diff kind: $kind"
+
+      - name: Run scanners
+        id: scan
+        env:
+          KIND: ${{ steps.kind.outputs.kind }}
+        run: |
+          # GitHub runs steps with bash -e; record each scanner's exit code instead of aborting.
+          set +e -uo pipefail
+          mkdir -p out
+          gitleaks git --log-opts="$BASE_SHA..HEAD" --redact --report-format sarif --report-path out/gitleaks.sarif; echo "gitleaks=$?" >> "$GITHUB_OUTPUT"
+          if [[ "$KIND" == docs ]]; then
+            echo "docs-only diff: gitleaks only"; echo "osv=0" >> "$GITHUB_OUTPUT"; echo "actionlint=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          docker run --rm -v "$PWD:/src" -w /src "$SEMGREP_IMAGE" \
+            semgrep scan --config p/default --config .appsec-baseline/semgrep/tls.yml --metrics=off --exclude .appsec-baseline --sarif --output out/semgrep.sarif || true
+          # Trivy exceptions (security/trivyignore) come from the base branch: a change can't silence its own scan.
+          # Absent in base (only the PR that adds the file): the PR's copy, like the verifier's BOOTSTRAP mode.
+          if git cat-file -e "$BASE_SHA:security/trivyignore" 2>/dev/null; then git show "$BASE_SHA:security/trivyignore" > "$RUNNER_TEMP/trivyignore" || exit 1
+          elif [[ -f security/trivyignore && ! -L security/trivyignore ]]; then cp security/trivyignore "$RUNNER_TEMP/trivyignore"
+          else : > "$RUNNER_TEMP/trivyignore"; fi
+          trivy config --quiet --ignorefile "$RUNNER_TEMP/trivyignore" --format sarif --output out/trivy.sarif infra/ || true
+          # linter configs come from the base branch, never from the PR (a PR could relax them)
+          if git cat-file -e "$BASE_SHA:.github/zizmor.yml" 2>/dev/null; then git show "$BASE_SHA:.github/zizmor.yml" > "$RUNNER_TEMP/zizmor.yml" || exit 1
+          elif git cat-file -e "$BASE_SHA" ; then printf 'rules: {}\n' > "$RUNNER_TEMP/zizmor.yml" # absent in base: tool defaults
+          else echo "::error::base commit unreadable"; exit 1; fi
+          if git cat-file -e "$BASE_SHA:.github/actionlint.yaml" 2>/dev/null; then git show "$BASE_SHA:.github/actionlint.yaml" > "$RUNNER_TEMP/actionlint.yaml" || exit 1
+          elif git cat-file -e "$BASE_SHA" ; then printf '{}\n' > "$RUNNER_TEMP/actionlint.yaml" # absent in base: tool defaults
+          else echo "::error::base commit unreadable"; exit 1; fi
+          zizmor --offline --config "$RUNNER_TEMP/zizmor.yml" --format sarif .github/workflows/ > out/zizmor.sarif || true
+          osv-scanner scan source -r --format json --output-file out/osv.json api web ; echo "osv=$?" >> "$GITHUB_OUTPUT"
+          actionlint -config-file "$RUNNER_TEMP/actionlint.yaml"; echo "actionlint=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Upload SARIF (semgrep)
+        if: always() && hashFiles('out/semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: out/semgrep.sarif
+          category: semgrep
+      - name: Upload SARIF (trivy)
+        if: always() && hashFiles('out/trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: out/trivy.sarif
+          category: trivy
+      - name: Upload SARIF (zizmor)
+        if: always() && hashFiles('out/zizmor.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: out/zizmor.sarif
+          category: zizmor
+      - name: Upload SARIF (gitleaks)
+        if: always() && hashFiles('out/gitleaks.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: out/gitleaks.sarif
+          category: gitleaks
+
+      - name: Decide
+        env:
+          KIND: ${{ steps.kind.outputs.kind }}
+          GITLEAKS_RC: ${{ steps.scan.outputs.gitleaks }}
+          OSV_RC: ${{ steps.scan.outputs.osv }}
+          ACTIONLINT_RC: ${{ steps.scan.outputs.actionlint }}
+        run: |
+          set -uo pipefail
+          fail=0
+          [[ "$GITLEAKS_RC" == 0 ]] || { echo "::error::gitleaks found secrets (SR-026)"; fail=1; }
+          [[ "$ACTIONLINT_RC" == 0 ]] || { echo "::error::actionlint failed (SR-030)"; fail=1; }
+          # SR-027: block known vulnerabilities with CVSS >= 7.0. osv-scanner exits 1 when it finds any.
+          if [[ "$OSV_RC" == 1 ]]; then
+            high=$(jq '[.results[]?.packages[]?.groups[]?.max_severity | select(. != null and . != "") | tonumber | select(. >= 7)] | length' out/osv.json) \
+              || { echo "::error::cannot parse OSV report"; fail=1; high=0; }
+            [[ "$high" == 0 ]] || { echo "::error::$high dependency vulnerabilities with CVSS >= 7 (SR-027)"; fail=1; }
+          elif [[ "$OSV_RC" != 0 ]]; then
+            echo "::error::osv-scanner error ($OSV_RC)"; fail=1
+          fi
+          # Semgrep, Trivy, zizmor: error-level SARIF results block; missing or invalid SARIF escalates.
+          if [[ "$KIND" != docs ]]; then # fail-closed: anything but docs runs the SARIF gate
+            python3 -I .appsec-baseline/gate/security_gate.py --sarif out/semgrep.sarif --sarif out/trivy.sarif \
+              --sarif out/zizmor.sarif --summary "$GITHUB_STEP_SUMMARY" || fail=1
+          fi
+          exit $fail
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: scanners
+          path: out/
+          retention-days: 30
+
+  # Required check for the SDLC workflow: tests and verify both succeeded (skipped or cancelled = fail).
+  stage-gate:
+    name: stage gate
+    if: always()
+    needs: [tests, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "$RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done

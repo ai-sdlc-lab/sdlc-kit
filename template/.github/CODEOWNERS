@@ -1,0 +1,26 @@
+# Changes to agent instructions, workflows, infrastructure and reviewer-owned
+# security artifacts need the owner's review (BASELINE, playbook ATK-02/ATK-09).
+/.claude/                               @nkalexiou
+/CLAUDE.md                              @nkalexiou
+/REVIEW.md                              @nkalexiou
+/.github/                               @nkalexiou
+/infra/                                 @nkalexiou
+/docs/specs/**/THREAT-*.md              @nkalexiou
+/docs/specs/**/TRACE-*.md               @nkalexiou
+/stages.yml                             @nkalexiou
+/appsec-baseline.lock                   @nkalexiou
+/scripts/                               @nkalexiou
+/docs/specs/**/reviews/                 @nkalexiou
+# Scanner configs would be loaded from the PR; the scanners job also rejects them (change 0001).
+**/.gitleaks.toml                       @nkalexiou
+**/.gitleaksignore                      @nkalexiou
+**/.semgrepignore                       @nkalexiou
+**/osv-scanner.toml                     @nkalexiou
+**/trivy.yaml                           @nkalexiou
+**/.trivyignore                         @nkalexiou
+/Makefile                               @nkalexiou
+/tests/process/                         @nkalexiou
+/.mcp.json                              @nkalexiou
+/.envrc                                 @nkalexiou
+/.vscode/                               @nkalexiou
+/security/                              @nkalexiou
