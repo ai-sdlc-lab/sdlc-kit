@@ -1,0 +1,5 @@
+# This project's accepted security-requirement risks. Format: appsec-baseline schemas/sr-exceptions.schema.json.
+# The SDLC workflow adds entries only for low/medium findings it couldn't fix in 3 rounds
+# (approved_by: agent); the owner may add others. Exceptions don't expire (owner decision 2026-11-02).
+# Every entry reaches main only through the owner's merge; the final PR lists new ones first.
+[]

@@ -1,0 +1,7 @@
+# Every action and reusable workflow is pinned by commit SHA (SR-027), including appsec-baseline's
+# verify.yml (pinned to appsec-baseline.lock since change 0001).
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin

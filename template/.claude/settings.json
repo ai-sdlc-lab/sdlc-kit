@@ -1,0 +1,86 @@
+{
+  "model": "claude-sonnet-5-5",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I -B \"${CLAUDE_PROJECT_DIR}/.claude/hooks/protect-paths.py\" || exit 2"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "disableBypassPermissionsMode": "disable",
+    "ask": [
+      "Edit(/.claude/**)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/REVIEW.md)",
+      "Edit(/stages.yml)",
+      "Edit(/appsec-baseline.lock)",
+      "Edit(/.appsec-baseline/**)",
+      "Edit(/.git/**)",
+      "Edit(/.mcp.json)",
+      "Edit(/.envrc)",
+      "Edit(/.vscode/**)"
+    ],
+    "deny": [
+      "Edit(/docs/specs/**/THREAT-*.md)",
+      "Edit(/docs/specs/**/TRACE-*.md)",
+      "Bash(make apply*)",
+      "Bash(make -C * apply*)",
+      "Bash(make destroy*)",
+      "Bash(make seed*)",
+      "Bash(terraform apply*)",
+      "Bash(terraform * apply*)",
+      "Bash(aws *)",
+      "WebFetch",
+      "Read(./.env*)",
+      "Read(**/.env*)",
+      "Read(~/.aws/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.claude.json)",
+      "Read(~/.claude/.credentials*)",
+      "Read(~/.netrc)",
+      "Read(~/.git-credentials)",
+      "Read(~/.docker/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.config/git/**)",
+      "Read(**/.terraform/**)",
+      "Read(**/*.tfstate*)",
+      "Read(**/*.tfvars)",
+      "Read(**/*.pem)",
+      "Read(**/id_*)",
+      "Bash(gh api*)",
+      "Bash(gh repo delete*)",
+      "Bash(gh repo edit*)",
+      "Bash(gh secret*)",
+      "Bash(gh variable*)",
+      "Bash(gh auth*)",
+      "Bash(gh workflow*)"
+    ],
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(make *)",
+      "Bash(.venv/bin/python3 -I -B scripts/*)",
+      "Bash(.venv/bin/python3 -I -B .appsec-baseline/*)",
+      "Bash(mkdir *)",
+      "Bash(ls*)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(diff *)",
+      "Bash(sort *)",
+      "Bash(grep *)",
+      "Bash(pwd)",
+      "Bash(touch *)",
+      "Bash(rm .stage-tmp/*)"
+    ]
+  }
+}

@@ -1,0 +1,2 @@
+# This project's scanner exceptions for Trivy. Each entry names the requirement and the exception it implements;
+# changes are listed in the final PR.
