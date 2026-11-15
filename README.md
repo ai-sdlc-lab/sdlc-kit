@@ -37,6 +37,18 @@ Files copied unchanged into a project, at the same paths:
 v1 is proven for Python and TypeScript web services. Other stacks need their Makefile and toolchain lines;
 C++ also needs memory-safety requirements in appsec-baseline first.
 
+## New project: `/new-project`
+
+1. Fill in `new-project/project.yml` (each field is explained in the file; a Claude Desktop session can fill it
+   from a description of the idea). Public link: https://github.com/ai-sdlc-lab/sdlc-kit/blob/main/new-project/project.yml
+2. Start Claude Code in this folder and run `/new-project` with the filled-in YAML pasted after it.
+
+The skill (`.claude/skills/new-project/SKILL.md`) checks the answers, adds the repo, rulesets, CI role and deploy
+policy to lab-admin Terraform, renders `template/` plus `scaffold/` (a hello app: FastAPI + Vite/TypeScript on
+Lambda, the dogs-app shape) and opens the setup PR. The owner's part: `aws login`, "OK" to the Terraform plan,
+merging the lab-admin PR and the setup PR. Deterministic steps are in `new-project/new_project.py`
+(`make venv test`).
+
 ## Versions
 
 A tag (`v1`, `v1.1`, …) is a version that a real run went through unattended. The workflow changes only when a

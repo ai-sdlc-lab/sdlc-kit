@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+node_modules/
+web/dist/
+web/junit-web.xml
+build/
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+
+# local stage loop
+.appsec-baseline/
+.claude/stage-log.jsonl
+.stage-tmp/
