@@ -32,8 +32,12 @@ except for answers the check rejects. Never run `aws` commands yourself; never m
 ## 3. The repository
 1. `.venv/bin/python3 -I -B new-project/new_project.py render .stage-tmp/<name>.yml ~/code/sdlc-lab/<name>`.
 2. In `~/code/sdlc-lab/<name>`: `git init -b main`, remote `git@github.com:ai-sdlc-lab/<name>.git`.
-   First commit on `main`: `README.md` only (the repo is empty, so `main` doesn't exist yet and no ruleset
-   applies; this is the one direct push, same as sdlc-kit). Push it.
+   First commit on `main`: `README.md` only. The rulesets already guard the default branch, even before it
+   exists, so create `main` through a temporary branch (the first branch pushed to an empty repo becomes the
+   default): `git push origin main:init`, `git push -u origin main`,
+   `gh repo edit ai-sdlc-lab/<name> --default-branch main`, `git push origin --delete init`. Confirm
+   `gh api repos/ai-sdlc-lab/<name>/rules/branches/main --jq '.[].type'` lists `deletion`,
+   `required_status_checks`, `non_fast_forward`, `pull_request`. This is the one direct write to `main`.
 3. `git checkout -b setup/sdlc-kit-v1`, add everything else, commit `Setup from sdlc-kit v1 (/new-project)`.
 4. Local checks before pushing: `make venv`, `.venv/bin/python3 -I -B scripts/appsec_checkout.py`, `make test`,
    `cd api && ../.venv/bin/ruff check . && ../.venv/bin/ruff format --check .`, `cd web && npm ci && npm run build`,
