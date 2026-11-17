@@ -7,7 +7,7 @@ TF := terraform -chdir=infra
 # @@END:deploy@@
 BUILD_INFO ?= build/lambda/app/build_info.json
 
-.PHONY: venv fmt test ci-test test-api test-process test-web lint build-info
+.PHONY: venv lock fmt test ci-test test-api test-process test-web lint build-info
 # @@IF:deploy@@
 .PHONY: build plan apply destroy
 # @@END:deploy@@
@@ -19,6 +19,14 @@ venv:
 	python3.14 -m venv .venv
 	.venv/bin/pip install -q --require-hashes -r api/requirements.txt -r api/requirements-dev.txt
 	.venv/bin/pip install -q --require-hashes -r tests/process/requirements.txt
+
+# New or changed Python dependency: edit api/requirements*.in, then this (hashed lockfiles + local venv).
+lock:
+	cd api && $(PY) -m piptools compile -q --allow-unsafe --generate-hashes --strip-extras \
+		--output-file=requirements.txt requirements.in
+	cd api && $(PY) -m piptools compile -q --allow-unsafe --generate-hashes --strip-extras \
+		--output-file=requirements-dev.txt requirements-dev.in
+	$(MAKE) venv
 
 test: test-api test-process test-web
 

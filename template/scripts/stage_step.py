@@ -325,7 +325,7 @@ def ship(a) -> int:
             return out({"ok": False, "pr": num, "pending": True, "errors": ["CI still running: run ship again"]})
         time.sleep(20)
     failed = [c for c in cs if c["bucket"] == "fail"]
-    if failed and not a.merge_red:
+    if failed:
         logs = []
         for c in failed[:3]:
             m = re.search(r"/runs/([0-9]+)", c.get("link", ""))
@@ -379,7 +379,6 @@ def main(argv=None) -> int:
     for name in ("ship", "final"):
         sub.choices[name].add_argument("--title", required=True)
     sub.choices["final"].add_argument("--issue", type=int, help="GitHub issue the change was started from")
-    sub.choices["ship"].add_argument("--merge-red", action="store_true", help="after the last fix round: merge anyway")
     a = p.parse_args(argv)
     if not CHANGE.match(a.change) or (getattr(a, "slug", None) and not SLUG.match(a.slug)):
         return out({"ok": False, "errors": ["bad change number or slug"]})

@@ -129,7 +129,11 @@ jobs:
           # GitHub runs steps with bash -e; record each scanner's exit code instead of aborting.
           set +e -uo pipefail
           mkdir -p out
-          gitleaks git --log-opts="$BASE_SHA..HEAD" --redact --report-format sarif --report-path out/gitleaks.sarif; echo "gitleaks=$?" >> "$GITHUB_OUTPUT"
+          # gitleaks config (security/gitleaks.toml: defaults + review-report hash allowlist) from the base branch, like trivyignore.
+          if git cat-file -e "$BASE_SHA:security/gitleaks.toml" 2>/dev/null; then git show "$BASE_SHA:security/gitleaks.toml" > "$RUNNER_TEMP/gitleaks.toml" || exit 1
+          elif [[ -f security/gitleaks.toml && ! -L security/gitleaks.toml ]]; then cp security/gitleaks.toml "$RUNNER_TEMP/gitleaks.toml"
+          else printf '[extend]\nuseDefault = true\n' > "$RUNNER_TEMP/gitleaks.toml"; fi
+          gitleaks git --config "$RUNNER_TEMP/gitleaks.toml" --log-opts="$BASE_SHA..HEAD" --redact --report-format sarif --report-path out/gitleaks.sarif; echo "gitleaks=$?" >> "$GITHUB_OUTPUT"
           if [[ "$KIND" == docs ]]; then
             echo "docs-only diff: gitleaks only"; echo "osv=0" >> "$GITHUB_OUTPUT"; echo "actionlint=0" >> "$GITHUB_OUTPUT"
             exit 0

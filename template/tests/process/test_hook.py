@@ -192,7 +192,6 @@ SKILL_COMMANDS = [  # every command the stage skill runs, one per Bash call (kee
     " spec-completeness=.stage-tmp/spec-spec-completeness.json",
     f"{PY} scripts/stage_step.py report --change 0007 --stage spec",
     f"{PY} scripts/stage_step.py ship --change 0007 --stage spec --title 'SPEC-0007: spec stage'",
-    f"{PY} scripts/stage_step.py ship --change 0007 --stage code --title 'CODE-0007' --merge-red",
     f"{PY} scripts/stage_step.py final --change 0007 --title '0007: demo'",
     f"{PY} scripts/stage_step.py final --change 0007 --title '0007: demo' --issue 31",
     "gh issue view 31 --json title,body",
