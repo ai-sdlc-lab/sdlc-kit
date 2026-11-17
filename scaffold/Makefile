@@ -1,0 +1,77 @@
+# Local AWS commands: export AWS_PROFILE=sdlc-lab-admin (aws login). CI injects role credentials.
+PY ?= $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python3.14)  # make venv once
+TF := terraform -chdir=infra
+BUILD_INFO ?= build/lambda/app/build_info.json
+
+.PHONY: venv fmt test ci-test test-api test-process test-web lint build build-info plan apply destroy run-api
+
+venv:
+	python3.14 -m venv .venv
+	.venv/bin/pip install -q --require-hashes -r api/requirements.txt -r api/requirements-dev.txt
+	.venv/bin/pip install -q --require-hashes -r tests/process/requirements.txt
+
+test: test-api test-process test-web
+
+test-api:
+	cd api && $(PY) -m pytest -q
+
+# Frontend tests: built-in node:test, no dependency; Node >= 22.18 (type stripping).
+test-web:
+	npm --prefix web test
+
+# SDLC workflow tests: hook, settings, agents, workflows, scripts. Needs .appsec-baseline/ (scripts/appsec_checkout.py).
+test-process:
+	$(PY) -I -B -m pytest -q -p no:cacheprovider tests/process
+
+# CI job `tests (workflow + app)`: every suite runs even if one fails; one junit.xml for the named-test check.
+# Frontend tests use built-in node:test, no npm ci (no dependency needed).
+ci-test:
+	python3 -I -m pip install --quiet --require-hashes -r tests/process/requirements.txt
+	python3 -I -m pip install --quiet --require-hashes -r api/requirements.txt -r api/requirements-dev.txt
+	rc=0; \
+	python3 -I -B -m pytest -q -p no:cacheprovider --junitxml=junit-workflow.xml tests/process || rc=1; \
+	(cd api && python3 -B -m pytest -q -p no:cacheprovider --junitxml=../junit-app.xml) || rc=1; \
+	npm --prefix web test || rc=1; \
+	python3 -I -B scripts/junit_merge.py junit.xml junit-workflow.xml junit-app.xml web/junit-web.xml || rc=1; \
+	exit $$rc
+
+# Formatting the SDLC workflow runs at the code stage (it doesn't run lint: CI does, tflint isn't local).
+fmt:
+	cd api && ruff format . && ruff check --fix .
+	terraform fmt -recursive infra
+
+lint:
+	cd api && ruff check . && ruff format --check .
+	cd web && npm run typecheck
+	terraform fmt -check -recursive infra
+	tflint --chdir=infra
+
+build:
+	cd web && npm ci && npm run build
+	rm -rf build && mkdir -p build/lambda
+	$(PY) -m pip install -q --target build/lambda --platform manylinux2014_aarch64 \
+		--implementation cp --python-version 3.14 --only-binary=:all: --require-hashes -r api/requirements.txt
+	cp -R api/app build/lambda/app
+	$(MAKE) build-info
+	cp -R web/dist build/lambda/web
+	cd build/lambda && find . -name '__pycache__' -prune -exec rm -rf {} + && zip -qr ../lambda.zip .
+
+# The git SHA the Lambda log events carry as `version`. Needs only git.
+build-info:
+	mkdir -p $(dir $(BUILD_INFO))
+	printf '{"sha": "%s"}\n' "$$(git rev-parse HEAD)" > $(BUILD_INFO)
+
+plan:
+	$(TF) init -input=false
+	$(TF) plan -out=tfplan
+
+apply:
+	$(TF) apply tfplan
+	rm -f infra/tfplan
+
+destroy:
+	$(TF) init -input=false
+	$(TF) destroy
+
+run-api:
+	cd api && uvicorn app.main:app --port 8080
