@@ -154,25 +154,25 @@ jobs:
           actionlint -config-file "$RUNNER_TEMP/actionlint.yaml"; echo "actionlint=$?" >> "$GITHUB_OUTPUT"
 
       - name: Upload SARIF (semgrep)
-        if: always() && hashFiles('out/semgrep.sarif') != ''
+        if: always() && !github.event.repository.private && hashFiles('out/semgrep.sarif') != '' # code scanning needs GHAS on private repos
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           sarif_file: out/semgrep.sarif
           category: semgrep
       - name: Upload SARIF (trivy)
-        if: always() && hashFiles('out/trivy.sarif') != ''
+        if: always() && !github.event.repository.private && hashFiles('out/trivy.sarif') != '' # code scanning needs GHAS on private repos
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           sarif_file: out/trivy.sarif
           category: trivy
       - name: Upload SARIF (zizmor)
-        if: always() && hashFiles('out/zizmor.sarif') != ''
+        if: always() && !github.event.repository.private && hashFiles('out/zizmor.sarif') != '' # code scanning needs GHAS on private repos
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           sarif_file: out/zizmor.sarif
           category: zizmor
       - name: Upload SARIF (gitleaks)
-        if: always() && hashFiles('out/gitleaks.sarif') != ''
+        if: always() && !github.event.repository.private && hashFiles('out/gitleaks.sarif') != '' # code scanning needs GHAS on private repos
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         with:
           sarif_file: out/gitleaks.sarif
