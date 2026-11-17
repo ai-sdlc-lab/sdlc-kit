@@ -2,4 +2,12 @@
 # The SDLC workflow adds entries only for low/medium findings it couldn't fix in 3 rounds
 # (approved_by: agent); the owner may add others. Exceptions don't expire (owner decision 2026-11-02).
 # Every entry reaches main only through the owner's merge; the final PR lists new ones first.
-[]
+- id: EXC-001
+  sr: [SR-027]
+  paths: [web/package-lock.json]
+  reason: >-
+    picomatch GHSA-fc5q-39xc-vjpf (ReDoS, CVSS 8.7): no fixed version exists (4.0.7 is the latest).
+    It comes in through vite, is used only at build time and is not in the deployed app.
+    Implemented in security/osv.toml. Remove both when picomatch releases a fix.
+  approved_by: nkalexiou
+  approved: "2026-11-17"

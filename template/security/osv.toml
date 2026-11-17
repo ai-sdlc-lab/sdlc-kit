@@ -1,0 +1,7 @@
+# This project's scanner exceptions for osv-scanner (SR-027). Each entry names the exception in
+# security/exceptions.yml it implements; read from the base branch in CI, changes are listed in the final PR.
+
+# EXC-001: picomatch ReDoS, no fixed version exists. Remove when picomatch releases a fix.
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+reason = "EXC-001: picomatch (via vite) is build-time only, not in the deployed app; no fixed version exists"
