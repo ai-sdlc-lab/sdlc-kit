@@ -18,6 +18,7 @@ def test_build_zip_contains_build_info(tmp_path):
     sha = run("git", "rev-parse", "HEAD").strip()  # noqa: S607
     assert re.fullmatch(r"[0-9a-f]{40}", sha)
     assert json.loads(target.read_text()) == {"sha": sha}
+    # @@IF:deploy@@
 
     # `make build` writes it into build/lambda/app after the app is copied and before the zip is made
     lines = run("make", "-n", "build").splitlines()  # noqa: S607
@@ -25,3 +26,4 @@ def test_build_zip_contains_build_info(tmp_path):
     info = next(i for i, line in enumerate(lines) if "build-info" in line)
     zipped = next(i for i, line in enumerate(lines) if "zip -qr" in line)
     assert copy < info < zipped
+    # @@END:deploy@@

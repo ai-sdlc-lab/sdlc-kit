@@ -7,7 +7,7 @@ A plain-language guide to the automation around @@NAME@@: what runs, when, with 
 How every change is built. Start a session in this repo with `claude --plugin-dir .appsec-baseline --permission-mode acceptEdits` and say `/stage <idea>`. Models: the session and the author on Sonnet, reviewers on Sonnet or Haiku. Permissions: `git`, `gh`, `python3` and `make` are allowed; `gh api`, `gh repo delete|edit`, `gh secret`, `gh variable`, `gh auth`, `gh workflow`, apply/destroy and `aws` are denied; the hook denies merges and pushes into `main` and protected-file edits; the steps are in `.claude/skills/stage/SKILL.md`.
 
 - One feature branch per change (`feature/<NNNN>-<slug>`). Agents work there autonomously: each stage (one md file, or the code) is a PR from `stage/<NNNN>-<stage>` into the feature branch, merged by the session once the stage's checks pass. The owner is asked only for product facts the agents can't know and for decisions on security-requirement findings.
-- **The only human gate is the merge to `main`**, which deploys: one PR from the feature branch to `main` after implementation and validation, with required checks and the owner's approval. Agents never merge into `main`.
+- **The only human gate is the merge to `main`**: one PR from the feature branch to `main` after implementation and validation, with required checks and the owner's approval. Agents never merge into `main`.
 - All LLM work (authoring and reviews) runs as subagents in the owner's local Claude Code session. **CI makes no LLM calls**: it runs scripts and scanners only.
 - Security findings are fixed by the agents (up to 3 rounds). Still open after that: a low or medium one gets an exception in this repo's `security/exceptions.yml` (`approved_by: agent`; exceptions don't expire); a high or critical one stays open and blocks only the merge to `main`. The final PR lists open findings, new exceptions and the session's decisions (`decisions.md`) first: the owner decides at that merge. After the intent stage the session never asks the owner anything. Exceptions are per repository; appsec-baseline holds only the requirements and the exception format.
 - PR comments only for findings that need the owner; passing results stay in logs and `reviews/`. No comment = nothing to report. Findings on `main`: one GitHub issue per finding (label `security-finding`).
@@ -31,9 +31,14 @@ How every change is built. Start a session in this repo with `claude --plugin-di
 | | | workflows / IaC (when changed) | LLM: workflow/IaC reviewer + zizmor, actionlint, Trivy |
 | | | code and dependencies | Semgrep, OSV-Scanner, gitleaks |
 | | | a report per required reviewer, matching the files (hash) | script (CI verifier) |
+<!-- @@IF:deploy@@ -->
 | 5 release | deployed build | running app | ZAP baseline in kind on `/` and `/api/health` (the container serves the Lambda zip's web build) |
 | | | any alert from the SR-004 header rules (10019, 10020, 10021, 10035, 10038, 10055) stops the deploy; other alerts stay in the `zap-report` artifact | script |
 | | | smoke test: app, health and exact SR-004 headers | script |
+<!-- @@END:deploy@@ -->
+<!-- @@IF:nodeploy@@ -->
+| 5 release | none: not deployed (`project.yml`), so no ZAP scan and no smoke test | | |
+<!-- @@END:nodeploy@@ -->
 | 6 finding | GitHub issue → new `intent.md` | back to stage 1 | |
 
 Docs-only PRs run gitleaks + the verifier only. Implementation starts only when every plan review passes.
@@ -54,8 +59,20 @@ Rounds: round 1 runs every reviewer that applies. From round 2 only the reviewer
 
 | Workflow | Starts when | Jobs |
 |---|---|---|
+<!-- @@IF:deploy@@ -->
 | `ci.yml` | every PR | api (ruff, pytest), web (build), infra (fmt, validate, tflint), kind deploy + health |
+<!-- @@END:deploy@@ -->
+<!-- @@IF:nodeploy@@ -->
+| `ci.yml` | every PR | api (ruff, pytest), web (build), kind deploy + health |
+<!-- @@END:nodeploy@@ -->
 | `security.yml` | every PR | `tests (workflow + app)` (SDLC workflow and app tests, one JUnit file), `stage reviews / verify` (appsec-baseline `verify.yml` at the lock SHA: reports, hashes, statuses, exceptions, structure, cross-check, plan drift, named tests), `security scanners` (docs-only diff: gitleaks; code diff: Semgrep incl. SR-022 rules, OSV-Scanner, gitleaks, Trivy, zizmor, actionlint), `stage gate` (tests + verify) |
+<!-- @@IF:deploy@@ -->
+<!-- @@IF:on_merge@@ -->
 | `deploy.yml` | merge to `main` | build → ZAP baseline in kind on `/` and `/api/health` (any alert from the SR-004 header rules stops the deploy) → deploy to AWS (OIDC, role `sdlc-lab-gh-@@NAME@@-dev`, environment `dev`) → smoke test of the app and its SR-004 headers. No LLM security tester in deploy (CI calls no AI) |
+<!-- @@END:on_merge@@ -->
+<!-- @@IF:manual@@ -->
+| `deploy.yml` | started by hand (Actions → deploy → Run, on `main`) | build → ZAP baseline in kind on `/` and `/api/health` (any alert from the SR-004 header rules stops the deploy) → deploy to AWS (OIDC, role `sdlc-lab-gh-@@NAME@@-dev`, environment `dev`) → smoke test of the app and its SR-004 headers. No LLM security tester in deploy (CI calls no AI) |
+<!-- @@END:manual@@ -->
+<!-- @@END:deploy@@ -->
 
 Required on `main`, one check per purpose: `build-and-test` (quality), `stage gate` (the change went through the SDLC workflow), `security scanners` (security).

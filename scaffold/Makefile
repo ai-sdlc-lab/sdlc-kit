@@ -1,9 +1,19 @@
+# @@IF:deploy@@
 # Local AWS commands: export AWS_PROFILE=sdlc-lab-admin (aws login). CI injects role credentials.
+# @@END:deploy@@
 PY ?= $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python3.14)  # make venv once
+# @@IF:deploy@@
 TF := terraform -chdir=infra
+# @@END:deploy@@
 BUILD_INFO ?= build/lambda/app/build_info.json
 
-.PHONY: venv fmt test ci-test test-api test-process test-web lint build build-info plan apply destroy run-api
+.PHONY: venv fmt test ci-test test-api test-process test-web lint build-info
+# @@IF:deploy@@
+.PHONY: build plan apply destroy
+# @@END:deploy@@
+# @@IF:run_local@@
+.PHONY: run-api
+# @@END:run_local@@
 
 venv:
 	python3.14 -m venv .venv
@@ -38,11 +48,14 @@ ci-test:
 # Formatting the SDLC workflow runs at the code stage (it doesn't run lint: CI does, tflint isn't local).
 fmt:
 	cd api && ruff format . && ruff check --fix .
+# @@IF:deploy@@
 	terraform fmt -recursive infra
+# @@END:deploy@@
 
 lint:
 	cd api && ruff check . && ruff format --check .
 	cd web && npm run typecheck
+# @@IF:deploy@@
 	terraform fmt -check -recursive infra
 	tflint --chdir=infra
 
@@ -55,12 +68,14 @@ build:
 	$(MAKE) build-info
 	cp -R web/dist build/lambda/web
 	cd build/lambda && find . -name '__pycache__' -prune -exec rm -rf {} + && zip -qr ../lambda.zip .
+# @@END:deploy@@
 
 # The git SHA the Lambda log events carry as `version`. Needs only git.
 build-info:
 	mkdir -p $(dir $(BUILD_INFO))
 	printf '{"sha": "%s"}\n' "$$(git rev-parse HEAD)" > $(BUILD_INFO)
 
+# @@IF:deploy@@
 plan:
 	$(TF) init -input=false
 	$(TF) plan -out=tfplan
@@ -72,6 +87,10 @@ apply:
 destroy:
 	$(TF) init -input=false
 	$(TF) destroy
+# @@END:deploy@@
+# @@IF:run_local@@
 
+# Local run: this, then `npm --prefix web run dev` (proxies /api here) → http://localhost:5173
 run-api:
 	cd api && uvicorn app.main:app --port 8080
+# @@END:run_local@@

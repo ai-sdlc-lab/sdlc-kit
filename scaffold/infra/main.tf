@@ -85,6 +85,8 @@ resource "aws_lambda_permission" "url" {
   action                 = "lambda:InvokeFunctionUrl"
   principal              = "*"
   function_url_auth_type = "NONE"
+  # One change at a time to the function's policy: in parallel, Lambda answers 409 (first kit deploy, 2026-11-17).
+  depends_on = [aws_lambda_function_url.api, aws_lambda_permission.invoke_via_url]
 }
 
 resource "aws_lambda_permission" "invoke_via_url" {

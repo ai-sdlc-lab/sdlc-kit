@@ -4,8 +4,13 @@ name: deploy
 # Any ZAP alert from an SR-004 header rule stops the deploy; other alerts stay in the report.
 
 on:
+  # @@IF:on_merge@@
   push:
     branches: [main]
+  # @@END:on_merge@@
+  # @@IF:manual@@
+  workflow_dispatch: # manual only (project.yml deploy.when: manual): Actions → deploy → Run workflow on main
+  # @@END:manual@@
 
 permissions: {}
 
