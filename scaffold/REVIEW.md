@@ -5,10 +5,17 @@ LLM reviewers only produce findings; a deterministic gate (`appsec-baseline/gate
 | When | Check | Covers | Required |
 |---|---|---|---|
 | Each stage, locally | reviewers from `stages.yml` (intent-completeness, spec-completeness, architecture-conformance, security-requirements-auditor, security-architect, security-code-reviewer, workflow-iac-reviewer) | completeness, architecture fit, requirements traceability, threat model, code vs. SRs and mitigations, workflows/IaC | gate allows before the stage PR |
+<!-- @@IF:deploy@@ -->
 | Every PR | `build-and-test` | ruff, pytest, tsc + build, terraform fmt/validate, tflint, kind deploy + health | yes |
+<!-- @@END:deploy@@ -->
+<!-- @@IF:nodeploy@@ -->
+| Every PR | `build-and-test` | ruff, pytest, tsc + build, kind deploy + health | yes |
+<!-- @@END:nodeploy@@ -->
 | Every PR | `stage gate` (`tests (workflow + app)` + `stage reviews / verify`) | review reports present, schema-valid, SHA-256 bound to the files, statuses and exceptions valid; template structure; cross-check; plan drift; named tests | yes |
 | Every PR | `security scanners` | docs-only: gitleaks. Code: Semgrep CE (+ SR-022 rules), OSV-Scanner, gitleaks, Trivy, zizmor, actionlint | yes |
+<!-- @@IF:deploy@@ -->
 | `main`, before each deploy | ZAP baseline on the release build in kind | DAST; any alert from an SR-004 header rule stops the deploy | deploy waits for it |
+<!-- @@END:deploy@@ -->
 | Final PR to `main` | owner approval | first: open findings, exceptions added (`security/exceptions.yml`), the session's decisions; then the whole change and protected-path changes | only the owner merges |
 
 No AI runs in CI. A PR comment appears only when the verifier fails; no finding, no comment.

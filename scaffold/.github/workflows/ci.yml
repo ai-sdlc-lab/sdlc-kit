@@ -6,10 +6,12 @@ on:
 permissions: {}
 
 env:
+  # @@IF:deploy@@
   TERRAFORM_VERSION: 1.16.6
   TERRAFORM_SHA256: 38034b38d03096399a7a1264a14561a8029b2b496fd1f169452656e53968f1b7
   TFLINT_VERSION: v0.64.0
   TFLINT_SHA256: cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537
+  # @@END:deploy@@
   KIND_VERSION: v0.33.0
   KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
   KUBECTL_VERSION: v1.37.1
@@ -51,6 +53,7 @@ jobs:
       - working-directory: web
         run: npm ci && npm run build && npm test # build = tsc --noEmit + vite build; test = node:test (SR-003)
 
+  # @@IF:deploy@@
   infra:
     name: "terraform: validate"
     runs-on: ubuntu-24.04
@@ -77,6 +80,7 @@ jobs:
       - run: terraform -chdir=infra init -backend=false -input=false
       - run: terraform -chdir=infra validate
       - run: tflint --chdir=infra
+  # @@END:deploy@@
 
   kind:
     name: "deploy test (kind)"
@@ -113,7 +117,12 @@ jobs:
   ci:
     name: build-and-test
     if: always()
+    # @@IF:deploy@@
     needs: [api, web, infra, kind]
+    # @@END:deploy@@
+    # @@IF:nodeploy@@
+    needs: [api, web, kind]
+    # @@END:nodeploy@@
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

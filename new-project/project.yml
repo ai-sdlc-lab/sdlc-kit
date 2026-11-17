@@ -1,32 +1,49 @@
-# project.yml: the answers /new-project needs (sdlc-kit v1).
+# project.yml: the answers /new-project needs (sdlc-kit v1). The owner decides every one of them.
 #
-# How to use: copy this file, fill in every field (a Claude Desktop session can do it from a description of
-# the idea), then start Claude Code in your sdlc-kit folder and run `/new-project` with the filled-in file
-# pasted after it (or its path). /new-project asks only about fields that are missing or invalid.
-# The file is saved in the new repository as `project.yml`, the record of how it was set up.
+# How to use: copy this file, fill in EVERY field (a Claude Desktop session can help draft it), then start
+# Claude Code in your sdlc-kit folder and run `/new-project` with the filled-in file pasted after it (or its
+# path). Nothing has a default: /new-project stops and asks you about any field that is empty or invalid, and
+# never fills one in itself. The file is saved in the new repository as `project.yml`, the record of your choices.
 #
-# v1 builds the shape proven in ai-sdlc-lab/dogs-app: FastAPI (Python 3.14) + Vite/TypeScript, on AWS Lambda
-# with a public function URL, region eu-north-1, lab account, free tier. Features beyond the starting point
-# (storage, login, uploads, ...) are built afterwards through /stage; the answers under `product` tell the
-# reviewers what is coming, so they apply the right security requirements from the first change.
+# What v1 builds: FastAPI (Python 3.14) + Vite/TypeScript, the SDLC workflow (/stage) and CI checks on every PR.
+# Whether and how it is deployed, and whether it runs on your machine, is decided below.
 
 kit: v1                 # sdlc-kit version to install (a tag of ai-sdlc-lab/sdlc-kit)
 
+github:
+  org: ""               # GitHub organisation for the repository. v1: ai-sdlc-lab (the org lab-admin manages)
+
 project:
-  name: ""              # GitHub repository name: a-z, 0-9 and '-', 3-40 characters, starts with a letter,
-                        #   not an existing repo (e.g. notes-app). Also names the AWS resources.
+  name: ""              # repository name: a-z, 0-9 and '-', 3-40 characters, starts with a letter,
+                        #   not an existing repo (e.g. notes-app). Also names the AWS resources if deployed.
   title: ""             # name shown on the page, 1-40 characters (e.g. Notes)
-  visibility: public    # public | private  (private repos on GitHub Free get no rulesets or secret
+  visibility: ""        # public | private  (private repos on GitHub Free get no rulesets or secret
                         #   scanning: the lab's protections need public)
   description: ""       # one line, at most 120 characters, shown on GitHub
   purpose: ""           # 2-4 sentences: the problem, who uses it, why
 
+deploy:
+  target: ""            # none | aws-lambda
+                        #   none: nothing is ever deployed; no AWS role, no deploy workflow, no infra/ folder.
+                        #     (Also no ZAP scan: it runs only before a deploy.)
+                        #   aws-lambda: the app runs on AWS Lambda with a PUBLIC URL (anyone can open it),
+                        #     environment dev, deployed by GitHub Actions; ZAP scan before each deploy.
+  # Only for aws-lambda (leave empty for none):
+  aws_account: ""       # v1: 992382408037 (the lab account)
+  region: ""            # v1: eu-north-1
+  when: ""              # on-merge: every merge into main deploys
+                        # manual: deploys only when you start the deploy workflow on GitHub (Actions → deploy → Run)
+
+local:
+  run_app: ""           # true | false. true: `make run-api` + `npm --prefix web run dev` start the app on your
+                        #   machine (http://localhost:5173). Tests always run locally and in CI either way.
+
 product:                # what the app will become; goes into docs/architecture.md "Product direction"
-  users: anonymous      # anonymous | authenticated
+  users: ""             # anonymous | authenticated
   auth: ""              # if authenticated: how users log in (e.g. "email login with Amazon Cognito"); else ""
-  writes: false         # true if users will create, change, delete or upload anything
+  writes: ""            # true if users will create, change, delete or upload anything; else false
   stored_data: ""       # what the app will store (e.g. "notes: title and text per user"), or "none"
   personal_data: ""     # personal data it will hold (e.g. "email addresses"), or "none"
-  external_services: [] # third-party hosts or APIs it will call, e.g. ["api.openweathermap.org"]
+  external_services: [] # third-party hosts or APIs it will call, e.g. ["api.openweathermap.org"], or []
 
 first_change: ""        # optional: one sentence, the first /stage run after setup (e.g. "list notes from S3")

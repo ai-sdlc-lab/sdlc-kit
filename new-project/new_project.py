@@ -25,6 +25,11 @@ LINE = re.compile(r'^[^"\\$`{}<>\n\r@]{1,120}$')  # one line, safe in a Terrafor
 HOST = re.compile(r"^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 TEXT_MAX = 800
 SKIP = {"__pycache__", ".ruff_cache", ".pytest_cache", "node_modules"}  # local tool output, never part of the kit
+# What v1 can build. Every choice is the owner's: the template has no defaults and `check` rejects blanks.
+ORG = "ai-sdlc-lab"  # the org lab-admin manages
+AWS_ACCOUNT, AWS_REGION = "992382408037", "eu-north-1"  # the lab account lab-admin manages
+NO_DEPLOY_PATHS = ("infra/", ".github/workflows/deploy.yml")
+MARK = re.compile(r"@@(IF|END):(\w+)@@")
 
 
 def _text(v, field, errors, required=True):
@@ -39,8 +44,23 @@ def check(a) -> list[dict]:
     if not isinstance(a, dict):
         return [{"field": "-", "error": "not a YAML mapping"}]
     p, prod = a.get("project") or {}, a.get("product") or {}
+    gh, dep, loc = a.get("github") or {}, a.get("deploy") or {}, a.get("local") or {}
     if a.get("kit") != VERSION:
         e.append({"field": "kit", "error": f"must be {VERSION} (this kit)"})
+    if gh.get("org") != ORG:
+        e.append({"field": "github.org", "error": f"{ORG} (the only org lab-admin manages in {VERSION})"})
+    target = dep.get("target")
+    if target not in ("none", "aws-lambda"):
+        e.append({"field": "deploy.target", "error": "none or aws-lambda"})
+    lam = {"aws_account": AWS_ACCOUNT, "region": AWS_REGION, "when": ("on-merge", "manual")}
+    for k, ok in lam.items():
+        v, allowed = dep.get(k), ok if isinstance(ok, tuple) else (ok,)
+        if target == "aws-lambda" and str(v) not in allowed:
+            e.append({"field": f"deploy.{k}", "error": " or ".join(allowed) + f" (what {VERSION} supports)"})
+        elif target == "none" and v not in ("", None):
+            e.append({"field": f"deploy.{k}", "error": "only for aws-lambda; leave empty"})
+    if not isinstance(loc.get("run_app"), bool):
+        e.append({"field": "local.run_app", "error": "true or false"})
     if not isinstance(p.get("name"), str) or not NAME.match(p["name"]):
         e.append({"field": "project.name", "error": "a-z, 0-9 and single '-', 3-40 characters, starts with a letter"})
     if not isinstance(p.get("title"), str) or not TITLE.match(p["title"]):
@@ -91,6 +111,32 @@ def product(a) -> str:
     return "\n".join(lines)
 
 
+def flags(a) -> dict[str, bool]:
+    deploy = a["deploy"]["target"] == "aws-lambda"
+    run = a["local"]["run_app"]
+    on_merge = deploy and a["deploy"]["when"] == "on-merge"
+    return {"deploy": deploy, "nodeploy": not deploy, "on_merge": on_merge, "manual": deploy and not on_merge,
+            "run_local": run, "norun_local": not run}
+
+
+def strip(text: str, f: dict[str, bool]) -> str:
+    """Keep lines inside @@IF:x@@ ... @@END:x@@ only when flag x is on; marker lines always go."""
+    out, keep = [], []
+    for line in text.splitlines(keepends=True):
+        m = MARK.search(line)
+        if m and m[1] == "IF":
+            keep.append(f[m[2]])
+        elif m:
+            if not keep:
+                sys.exit(f"unbalanced @@END:{m[2]}@@")
+            keep.pop()
+        elif all(keep):
+            out.append(line)
+    if keep:
+        sys.exit("unclosed @@IF@@ block")
+    return "".join(out)
+
+
 def render(a, src_file: str, dest: Path) -> list[str]:
     if dest.exists() and any(p.name != ".git" for p in dest.iterdir()):
         sys.exit(f"{dest} is not empty")
@@ -103,14 +149,17 @@ def render(a, src_file: str, dest: Path) -> list[str]:
         "@@PRODUCT@@": product(a),
         "@@KIT@@": VERSION,
     }
+    f_on = flags(a)
     written = []
     for base, fill in ((KIT / "template", False), (KIT / "scaffold", True)):
         for f in sorted(x for x in base.rglob("*") if x.is_file() and not SKIP & set(x.parts)):
             rel = f.relative_to(base)
+            if fill and f_on["nodeploy"] and rel.as_posix().startswith(NO_DEPLOY_PATHS):
+                continue
             out = dest / rel
             out.parent.mkdir(parents=True, exist_ok=True)
             if fill:
-                text = f.read_text()
+                text = strip(f.read_text(), f_on)
                 for k, v in values.items():
                     text = text.replace(k, v)
                 out.write_text(text)
@@ -142,8 +191,9 @@ def lab_admin(a, lab: Path) -> None:
     insert(gh, "    # /new-project: repos above", f'    {n} = {{ visibility = "{p["visibility"]}", description = "{desc}" }}')
     if p["visibility"] == "public":  # rulesets exist only for public repos (GitHub Free)
         insert(gh, "    # /new-project: required checks above", f"    {n} = {CHECKS}")
-    insert(aws, "    # /new-project: CI roles above", f'    {n}-dev = {{ repo = "{n}", env = "dev" }}')
-    insert(aws, "    # /new-project: Lambda apps above", f"    {n} = {{}}")
+    if a["deploy"]["target"] == "aws-lambda":  # no deploy: no AWS role, no deploy environment
+        insert(aws, "    # /new-project: CI roles above", f'    {n}-dev = {{ repo = "{n}", env = "dev" }}')
+        insert(aws, "    # /new-project: Lambda apps above", f"    {n} = {{}}")
 
 
 def main(argv: list[str]) -> int:
