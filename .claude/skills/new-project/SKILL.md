@@ -35,7 +35,8 @@ you ask: `aws login --profile sdlc-lab-admin`; "OK" after seeing the Terraform p
 ## 3. The repository
 1. `.venv/bin/python3 -I -B new-project/new_project.py render .stage-tmp/<name>.yml ~/code/sdlc-lab/<name>`.
 2. In `~/code/sdlc-lab/<name>`: `git init -b main`, remote `git@github.com:ai-sdlc-lab/<name>.git`.
-   First commit on `main`: `README.md` only. The rulesets already guard the default branch, even before it
+   First commit on `main`: `README.md` and `security/` only (CI reads the scanner configs and their exceptions
+   from the base branch, never from a PR, so they must be on `main` before the setup PR). The rulesets already guard the default branch, even before it
    exists, so create `main` through a temporary branch (the first branch pushed to an empty repo becomes the
    default): `git push origin main:init`, `git push -u origin main`,
    `gh repo edit ai-sdlc-lab/<name> --default-branch main`, `git push origin --delete init`. Confirm
