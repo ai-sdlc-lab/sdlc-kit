@@ -208,7 +208,10 @@ def report_findings(doc: dict, statuses: dict) -> tuple[list[dict], list[str]]:
 
 
 def code_scope(change: str, regex: str) -> list[str]:
-    paths = run("git", "diff", "--name-only", f"{feature(change)}...HEAD").stdout.split()
+    # The whole change (vs main), not just this stage PR: a later code-stage PR replaces the report, and the
+    # final PR's verify needs it to cover every changed file. Same result as vs the feature branch on a first run.
+    run("git", "fetch", "-q", "origin", "main")
+    paths = run("git", "diff", "--name-only", "origin/main...HEAD").stdout.split()
     paths += run("git", "diff", "--name-only", "HEAD").stdout.split() + run("git", "ls-files", "--others", "--exclude-standard").stdout.split()
     return sorted({p for p in paths if not is_doc(p) and re.match(regex, p) and (ROOT / p).is_file()})
 
