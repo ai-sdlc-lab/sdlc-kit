@@ -79,8 +79,9 @@ resource "aws_lambda_function_url" "api" {
 }
 
 # Since Oct 2025 a NONE function URL needs both permissions (Lambda docs: urls-auth).
+# Own statement ID: creating the URL can add "FunctionURLAllowPublicAccess" itself (409 on techmerio's first deploy, 2026-11-23).
 resource "aws_lambda_permission" "url" {
-  statement_id           = "FunctionURLAllowPublicAccess"
+  statement_id           = "FunctionURLAllowPublicAccessTf"
   function_name          = aws_lambda_function.api.function_name
   action                 = "lambda:InvokeFunctionUrl"
   principal              = "*"
